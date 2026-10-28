@@ -1,0 +1,16 @@
+# 运行时产物：运行时依赖装在插件数据目录里，不要提交
+node_modules/
+runtime-deps/
+
+# 插件本地数据（玩家数据、密码、日志）绝不能提交
+data/
+
+# 日志
+*.log
+log/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
