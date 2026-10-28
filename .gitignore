@@ -14,3 +14,7 @@ log/
 .idea/
 .DS_Store
 Thumbs.db
+
+# 打好的发布包不提交（走 Releases 附件）
+dist/
+*.zip
