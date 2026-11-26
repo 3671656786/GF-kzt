@@ -2360,6 +2360,7 @@ function registerGfWebui(ctx) {
           进行中: !!状态.进行中,
           错误: 状态.错误 || "",
           检查时间: Number(状态.检查时间) || 0,
+          签名: 状态.签名 || null,
           最后结果: 状态.最后结果 || null,
           源: 取源(读更新配置(dataPath).源).键,
           源列表: 更新下载源表.map((x) => ({ 键: x.键, 名: x.名 })),
@@ -2393,7 +2394,8 @@ function registerGfWebui(ctx) {
         有更新,
         阶段: "空闲",
         错误: "",
-        发布页: 查.页面
+        发布页: 查.页面,
+        签名: 查.签名 || null
       });
       res.json({
         code: 0,
@@ -2405,7 +2407,8 @@ function registerGfWebui(ctx) {
           发布时间: 查.发布时间,
           说明: 查.说明.slice(0, 4000),
           发布页: 查.页面,
-          包大小: 查.资产大小
+          包大小: 查.资产大小,
+          签名: 查.签名 || null
         },
         message: 有更新 ? `发现新版本 v${查.版本}` : "已经是最新版本"
       });
@@ -2447,6 +2450,8 @@ function registerGfWebui(ctx) {
         res.status(400).json({ code: -1, message: "未知的下载源" });
         return;
       }
+      // 签名无法验证时，必须显式同意承担风险才继续（不接受缺省）
+      const 同意承担风险 = 布尔值(body.acceptRisk ?? body.同意风险);
       const 插件目录 = String(ctx.pluginPath || "").trim();
       const 安装源目录 = 解析安装源目录(ctx);
       if (!插件目录 || !安装源目录) {
@@ -2465,9 +2470,9 @@ function registerGfWebui(ctx) {
         return;
       }
       写更新配置(dataPath, { 源: 源键 });
-      const result = await 执行更新({ 插件目录, 安装源目录, dataPath, 目标版本, 源键 });
+      const result = await 执行更新({ 插件目录, 安装源目录, dataPath, 目标版本, 源键, 允许无签名: 同意承担风险 });
       if (!result.ok) {
-        res.status(500).json({
+        res.status(result.需要风险确认 ? 409 : 500).json({
           code: -1,
           message: `【${result.阶段}】${result.原因}`,
           data: result
