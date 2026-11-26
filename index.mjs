@@ -14,6 +14,22 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { pathToFileURL as pathToFileURL$1 } from 'node:url';
+import {
+  仓库 as 更新仓库,
+  插件ID as 更新插件ID,
+  下载源表 as 更新下载源表,
+  默认源键 as 更新默认源键,
+  比较版本,
+  查发布,
+  取源,
+  读状态 as 读更新状态,
+  写状态 as 写更新状态,
+  读更新配置,
+  写更新配置,
+  读包版本,
+  解析安装源目录,
+  执行更新
+} from "./lib/update.mjs";
 
 function 清理文本(v) {
   return String(v ?? "").trim();
@@ -2327,6 +2343,162 @@ function registerGfWebui(ctx) {
       res.status(500).json({ code: -1, message: msg || "撤回失败" });
     }
   });
+  // ---------------------------------------------------------------- 自更新
+  base.get(wrapPath("/update/status"), (_req, res) => {
+    try {
+      const dataPath = String(ctx.dataPath || "").trim();
+      const 状态 = 读更新状态(dataPath);
+      const 当前版本 = 读包版本(String(ctx.pluginPath || "").trim()) || "0.0.0";
+      const 最新版本 = String(状态.最新版本 || "");
+      res.json({
+        code: 0,
+        data: {
+          当前版本,
+          最新版本,
+          有更新: 最新版本 ? 比较版本(最新版本, 当前版本) > 0 : false,
+          阶段: 状态.阶段 || "空闲",
+          进行中: !!状态.进行中,
+          错误: 状态.错误 || "",
+          检查时间: Number(状态.检查时间) || 0,
+          最后结果: 状态.最后结果 || null,
+          源: 取源(读更新配置(dataPath).源).键,
+          源列表: 更新下载源表.map((x) => ({ 键: x.键, 名: x.名 })),
+          仓库: 更新仓库,
+          发布页: `https://github.com/${更新仓库}/releases`
+        }
+      });
+    } catch (e) {
+      ctx.logger?.error?.("[kzt] update/status 失败:", e);
+      res.status(500).json({ code: -1, message: "更新状态读取失败" });
+    }
+  });
+  base.post(wrapPath("/update/check"), async (_req, res) => {
+    try {
+      const dataPath = String(ctx.dataPath || "").trim();
+      if (读更新状态(dataPath).进行中) {
+        res.status(409).json({ code: -1, message: "正在更新中，请稍后再查" });
+        return;
+      }
+      const 查 = await 查发布();
+      if (!查.ok) {
+        写更新状态(dataPath, { 检查时间: Date.now(), 阶段: "失败", 错误: 查.原因 });
+        res.status(500).json({ code: -1, message: 查.原因 });
+        return;
+      }
+      const 当前版本 = 读包版本(String(ctx.pluginPath || "").trim()) || "0.0.0";
+      const 有更新 = 比较版本(查.版本, 当前版本) > 0;
+      写更新状态(dataPath, {
+        检查时间: Date.now(),
+        最新版本: 查.版本,
+        有更新,
+        阶段: "空闲",
+        错误: "",
+        发布页: 查.页面
+      });
+      res.json({
+        code: 0,
+        data: {
+          当前版本,
+          最新版本: 查.版本,
+          有更新,
+          标题: 查.标题,
+          发布时间: 查.发布时间,
+          说明: 查.说明.slice(0, 4000),
+          发布页: 查.页面,
+          包大小: 查.资产大小
+        },
+        message: 有更新 ? `发现新版本 v${查.版本}` : "已经是最新版本"
+      });
+    } catch (e) {
+      ctx.logger?.error?.("[kzt] update/check 失败:", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ code: -1, message: msg || "检查更新失败" });
+    }
+  });
+  base.post(wrapPath("/update/source"), (req, res) => {
+    try {
+      const 键 = String(req.body?.source || "").trim();
+      if (!取源(键) || 取源(键).键 !== 键) {
+        res.status(400).json({ code: -1, message: "未知的下载源" });
+        return;
+      }
+      写更新配置(String(ctx.dataPath || "").trim(), { 源: 键 });
+      res.json({ code: 0, data: { 源: 键, 源列表: 更新下载源表.map((x) => ({ 键: x.键, 名: x.名 })) }, message: "下载源已保存" });
+    } catch (e) {
+      ctx.logger?.error?.("[kzt] update/source 失败:", e);
+      res.status(500).json({ code: -1, message: "保存下载源失败" });
+    }
+  });
+  base.post(wrapPath("/update/install"), async (req, res) => {
+    try {
+      const dataPath = String(ctx.dataPath || "").trim();
+      if (读更新状态(dataPath).进行中) {
+        res.status(409).json({ code: -1, message: "已有更新任务在进行中" });
+        return;
+      }
+      const body = req.body || {};
+      const 目标版本 = String(body.version || "").trim().replace(/^v/i, "");
+      if (目标版本 && !/^\d+\.\d+\.\d+(?:[-.][0-9A-Za-z]+)?$/.test(目标版本)) {
+        res.status(400).json({ code: -1, message: "版本号格式不合法" });
+        return;
+      }
+      const 源键 = String(body.source || "").trim() || 取源(读更新配置(dataPath).源).键;
+      if (!取源(源键) || 取源(源键).键 !== 源键) {
+        res.status(400).json({ code: -1, message: "未知的下载源" });
+        return;
+      }
+      const 插件目录 = String(ctx.pluginPath || "").trim();
+      const 安装源目录 = 解析安装源目录(ctx);
+      if (!插件目录 || !安装源目录) {
+        const 原因 = "识别不到插件的安装源目录（plugins/GF-kzt），已取消更新：只写运行副本会被重载时的旧文件覆盖回去";
+        写更新状态(dataPath, { 阶段: "失败", 错误: 原因, 进行中: false });
+        res.status(500).json({ code: -1, message: 原因 });
+        return;
+      }
+      // 指定版本时先拦住同版本/旧版本；没指定版本则由执行更新在查到最新版后拦
+      const 当前版本 = 读包版本(String(安装源目录 || "").trim()) || 读包版本(插件目录);
+      if (目标版本 && 当前版本 && 比较版本(目标版本, 当前版本) <= 0) {
+        res.status(400).json({
+          code: -1,
+          message: `目标版本 v${目标版本} 不高于当前版本 v${当前版本}；每次更新都必须升版本号`
+        });
+        return;
+      }
+      写更新配置(dataPath, { 源: 源键 });
+      const result = await 执行更新({ 插件目录, 安装源目录, dataPath, 目标版本, 源键 });
+      if (!result.ok) {
+        res.status(500).json({
+          code: -1,
+          message: `【${result.阶段}】${result.原因}`,
+          data: result
+        });
+        return;
+      }
+      res.json({
+        code: 0,
+        data: result,
+        message: `已更新到 v${result.新版本}，正在重载插件`
+      });
+      // 先让响应发出去，再重载；否则浏览器会拿到一个被截断的 500
+      setTimeout(async () => {
+        try {
+          const pm = ctx.pluginManager;
+          if (pm && typeof pm.reloadPlugin === "function") {
+            const ok = await pm.reloadPlugin(更新插件ID);
+            ctx.logger?.info?.(`[kzt] 自更新后重载插件：${ok ? "成功" : "返回 false"}`);
+          } else {
+            ctx.logger?.warn?.("[kzt] 自更新完成，但宿主未提供 pluginManager.reloadPlugin，请手动重载插件");
+          }
+        } catch (e) {
+          ctx.logger?.error?.("[kzt] 自更新后重载失败:", e);
+        }
+      }, 2500);
+    } catch (e) {
+      ctx.logger?.error?.("[kzt] update/install 失败:", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ code: -1, message: msg || "安装更新失败" });
+    }
+  });
   base.get(wrapPath("/sharp-deps/status"), async (_req, res) => {
     try {
       const status = await getSharpDependencyStatus(sharpDepsPaths(ctx));
@@ -2476,7 +2648,16 @@ function 规范化键盘(raw) {
 async function 发消息(ctx, 发送目标, 内容, 选项 = {}) {
   const list = Array.isArray(内容) ? 内容 : [内容];
   const apiPath = 组装发送路径(发送目标);
-  const keyboard = 选项?.keyboard && Array.isArray(选项.keyboard.rows) && 选项.keyboard.rows.length ? 选项.keyboard : null;
+  let keyboard = 选项?.keyboard && Array.isArray(选项.keyboard.rows) && 选项.keyboard.rows.length ? 选项.keyboard : null;
+  // 官方：action.enter 仅单聊可用（群聊传了会被忽略，部分客户端版本还会报键盘参数错误）
+  if (keyboard && 发送目标.scope !== "private" && 发送目标.scope !== "c2c") {
+    keyboard = {
+      rows: keyboard.rows.map((row) => ({
+        ...row,
+        buttons: row.buttons.map((b) => ({ ...b, action: { ...b.action, enter: false } }))
+      }))
+    };
+  }
   const outChunks = [];
   let lastResult = null;
 
@@ -2530,8 +2711,12 @@ async function 撤回消息(ctx, 目标, messageId) {
 /** 只开放「图片」和「文件」两类，其余类型不暴露给控制台 */
 const MEDIA_FILE_TYPES = { image: 1, file: 4 };
 
-/** 宿主 express.json 上限 10MB，base64 膨胀 4/3，原始文件留 7MB 余量 */
-const MEDIA_MAX_BYTES = 7 * 1024 * 1024;
+/**
+ * QQ 官方「二进制直传」硬上限 5MB（超过必须走 URL 或分片上传）；
+ * 宿主 express.json 是 10MB，base64 还会膨胀 4/3，所以这里把 5MB 当作真实上限。
+ * 放宽到 7MB 只会在上传时被官方以 850031 拒绝，用户却看不懂原因。
+ */
+const MEDIA_MAX_BYTES = 5 * 1024 * 1024;
 
 function 组装上传路径(目标) {
   if (目标.scope === "group") {
@@ -2554,11 +2739,19 @@ async function 发送富媒体(ctx, 发送目标, 选项) {
   const fileInfo = 清理文本(up?.file_info);
   if (!fileInfo) throw new Error("上传未返回 file_info");
 
+  // 官方 msg_type=7 的请求体只有 media.file_info（示例里没有 content），
+  // 说明文字必须另发一条 msg_type=0，不能塞进富媒体消息里碰运气。
   const sendBody = { msg_type: 7, media: { file_info: fileInfo } };
   const caption = 清理文本(选项.caption);
-  if (caption) sendBody.content = caption;
 
   const result = await BOTAPI(ctx, 组装发送路径(发送目标), 附加被动凭证(发送目标, sendBody));
+  if (caption) {
+    await BOTAPI(
+      ctx,
+      组装发送路径(发送目标),
+      附加被动凭证(发送目标, { msg_type: 0, content: caption })
+    );
+  }
   const label = fileType === 1 ? "图片" : "文件";
   recordOutboundMessage(
     ctx,

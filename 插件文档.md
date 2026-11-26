@@ -1,6 +1,6 @@
 # kzt · QQ 官方机器人网页控制台
 
-![版本](https://img.shields.io/badge/version-1.6.2-blue.svg)
+![版本](https://img.shields.io/badge/version-1.7.0-blue.svg)
 ![框架](https://img.shields.io/badge/框架-咔咔珂%20kakake-0f766e.svg)
 ![平台](https://img.shields.io/badge/platform-QQ%20Official%20Bot-green.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)
@@ -17,7 +17,7 @@
 
 **方式一：发布包（推荐）**
 
-到 [Releases](https://github.com/3671656786/GF-kzt/releases) 下载 `GF-kzt-1.6.2.zip`，解压后得到一个 `GF-kzt/` 文件夹，整个放进框架根目录的 `plugins/` 下：
+到 [Releases](https://github.com/3671656786/GF-kzt/releases) 下载最新的 `GF-kzt-*.zip`，解压后得到一个 `GF-kzt/` 文件夹，整个放进框架根目录的 `plugins/` 下：
 
 ```
 kakake/plugins/GF-kzt/
@@ -92,7 +92,7 @@ git clone https://github.com/3671656786/GF-kzt.git kakake/plugins/GF-kzt
   （官方限制：按钮只在 Markdown 消息里生效，文字最多 10 字、每行 3 个、最多 5 行，超出会被裁剪）
 - **发图片 / 文件**：同一行的「图片」「文件」按钮，选文件即发；
   输入框里已写的文字会作为这条媒体的说明文字，发完自动清空
-  - 单次上限 **7MB**（受框架 10MB 请求体限制），超限会直接提示
+  - 单次上限 **5MB**（QQ 官方二进制直传硬限制，超限需改用分片上传），超限会直接提示
   - 图片按 `file_type=1`、文件按 `file_type=4` 上传；群聊与私聊各走自己的上传接口
 - **撤回**：长按消息气泡 3 秒，确认后撤回（需要机器人有对应权限；自己发出的消息限 2 分钟内）
 
@@ -102,7 +102,22 @@ git clone https://github.com/3671656786/GF-kzt.git kakake/plugins/GF-kzt
   设了天数后，超出范围的日志文件在写入新消息时自动删除（每小时最多清理一次），也可「立即清理过期记录」；
   面板上实时显示现有文件数、占用体积与日期范围
 - **登录与安全**：修改密码（带五条规则即时校验）、已锁定 IP 列表与手动解锁
+- **插件自动更新**：版本检测、多下载源、备份与一键安装，带阶段状态提示
 - **Sharp 运行时依赖**：检测、一键安装与安装进度轮询
+
+## 🔄 插件自动更新
+
+「系统设置 → 插件自动更新」面板会显示当前版本与最新版本，可手动检查、切换下载源、指定版本安装：
+
+- **版本检测**：查 `3671656786/GF-kzt` 的最新 Release，只认 `GF-kzt-<版本>.zip` 资产；结果缓存 5 分钟，避免控制台轮询打爆 GitHub API。**每次更新都必须升版本号**，同版本重装和降级会被明确拒绝。
+- **下载**：支持 GitHub 直连 / 官方 API / gh-proxy / catmak 四个源，首选失败按顺序降级；每个源都先试 `fetch` 再试 Node `https`，带 90 秒超时。
+- **安装**：先在内存里解压并校验（必须含 `index.mjs` / `package.json` / `plugin.json` / `webui/remote.js`，且包内版本与 Release 标签一致），再备份，然后同时覆盖 `plugins/GF-kzt/`（宿主重载的复制来源）与 `plugins_two/<账号>/GF-kzt/`（当前运行副本），最后回读磁盘版本确认。
+- **异常处理**：每个阶段（检查版本 / 下载 / 解压 / 校验 / 备份 / 安装 / 回读校验）失败都会停止写入并把阶段和原因写到状态里；面板直接显示错误，不会「假装成功」。下载失败时现有文件不动。
+- **回滚备份**：备份放在 `data/<AppID>/GF-kzt/update-backups/`（不是 `plugins/` 下，避免被宿主误认成新插件），保留最近 3 份，出问题可手动拷回。
+- **状态提示**：安装期间面板每 1.5 秒刷新阶段状态；完成后延迟 2.5 秒调用 `ctx.pluginManager.reloadPlugin('GF-kzt')` 自动重载，日志会记录重载结果。
+- **下载源偏好**：存在插件数据目录的 `update-config.json`，不随插件更新被覆盖；GitHub API 未认证限流 60 次/小时，通常够用。
+
+> 自动更新只替换插件代码文件（发布包里有哪些就覆盖哪些），不会删除本地 `data/`、日志、备份或你没有提交到包里的文件。
 
 ## ⚙️ 插件配置弹窗
 
@@ -166,6 +181,10 @@ git clone https://github.com/3671656786/GF-kzt.git kakake/plugins/GF-kzt
 | POST | `/kzt/settings` | 保存设置（布尔开关 + `保留天数`，0 表示永久） |
 | GET | `/kzt/storage` | 日志体积统计（`{文件数, 字节, 最早, 最晚, 保留天数}`） |
 | POST | `/kzt/storage/clean` | 立即按保留天数清理 |
+| GET | `/kzt/update/status` | 更新状态（当前/最新版本、阶段、错误、下载源、发布页） |
+| POST | `/kzt/update/check` | 检查 GitHub 最新 Release |
+| POST | `/kzt/update/install` | 安装更新（`{version?,source?}`；成功后延迟重载） |
+| POST | `/kzt/update/source` | 保存下载源偏好（`{source}`） |
 | GET | `/kzt/sharp-deps/status` | Sharp 依赖状态 |
 | POST | `/kzt/sharp-deps/install` | 触发安装 |
 
@@ -175,6 +194,7 @@ git clone https://github.com/3671656786/GF-kzt.git kakake/plugins/GF-kzt
 
 - `index.mjs`：插件入口。导出 `plugin_init` / `plugin_onmessage` / `plugin_cleanup`，以及宿主插件配置用的
   `plugin_config_ui` / `plugin_get_config` / `plugin_set_config`；`plugin_onmessage` 仅做「把消息写进日志」一件事。
+- `lib/update.mjs`：自动更新模块（版本检测 / 下载降级 / 内存解压校验 / 备份 / 双目录覆盖 / 状态落盘），零第三方依赖。
 - `webui/remote.js`：控制台前端（React 远程模块，`kind: module`），内含登录页、仪表盘、排行、消息、设置四个页面。
 - `webui/static/`：静态资源目录。
 
