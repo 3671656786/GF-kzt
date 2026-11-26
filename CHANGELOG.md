@@ -2,6 +2,12 @@
 
 本插件遵循 [语义化版本](https://semver.org/lang/zh-CN/)。发布包见 [Releases](https://github.com/3671656786/GF-kzt/releases)。
 
+## v1.7.2
+
+- 「插件自动更新」面板新增 **GitHub API Token**（可选）：匿名 API 60 次/小时，填 Token 后可用 5000 次/小时；面板显示核心配额剩余数。
+- Token 只存插件数据目录，**仅发给 GitHub 官方域名**（api.github.com / github.com / uploads.github.com），不会发给 gh-proxy / catmak 等第三方加速源；留空保存即清除。
+- 明确了无签名时的行为：未同意风险不发起任何下载；显式同意后才下载安装（已有测试断言）。
+
 ## v1.7.1
 
 - **更新前验证 GitHub 官方签名**：检查 Release 对应 commit 的 `verified`/`reason` 与提交作者；官方签名通过才直接安装。

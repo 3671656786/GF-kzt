@@ -21,6 +21,10 @@ import {
   默认源键 as 更新默认源键,
   比较版本,
   查发布,
+  查速率限制,
+  设令牌,
+  令牌格式合法,
+  清空发布缓存,
   取源,
   读状态 as 读更新状态,
   写状态 as 写更新状态,
@@ -2361,6 +2365,8 @@ function registerGfWebui(ctx) {
           错误: 状态.错误 || "",
           检查时间: Number(状态.检查时间) || 0,
           签名: 状态.签名 || null,
+          速率限制: 状态.速率限制 || null,
+          有令牌: !!String(读更新配置(dataPath).令牌 || "").trim(),
           最后结果: 状态.最后结果 || null,
           源: 取源(读更新配置(dataPath).源).键,
           源列表: 更新下载源表.map((x) => ({ 键: x.键, 名: x.名 })),
@@ -2388,6 +2394,7 @@ function registerGfWebui(ctx) {
       }
       const 当前版本 = 读包版本(String(ctx.pluginPath || "").trim()) || "0.0.0";
       const 有更新 = 比较版本(查.版本, 当前版本) > 0;
+      const 配额 = await 查速率限制();
       写更新状态(dataPath, {
         检查时间: Date.now(),
         最新版本: 查.版本,
@@ -2395,7 +2402,8 @@ function registerGfWebui(ctx) {
         阶段: "空闲",
         错误: "",
         发布页: 查.页面,
-        签名: 查.签名 || null
+        签名: 查.签名 || null,
+        速率限制: 配额.ok ? 配额 : null
       });
       res.json({
         code: 0,
@@ -2408,7 +2416,8 @@ function registerGfWebui(ctx) {
           说明: 查.说明.slice(0, 4000),
           发布页: 查.页面,
           包大小: 查.资产大小,
-          签名: 查.签名 || null
+          签名: 查.签名 || null,
+          速率限制: 配额.ok ? 配额 : null
         },
         message: 有更新 ? `发现新版本 v${查.版本}` : "已经是最新版本"
       });
@@ -2416,6 +2425,27 @@ function registerGfWebui(ctx) {
       ctx.logger?.error?.("[kzt] update/check 失败:", e);
       const msg = e instanceof Error ? e.message : String(e);
       res.status(500).json({ code: -1, message: msg || "检查更新失败" });
+    }
+  });
+  base.post(wrapPath("/update/token"), (req, res) => {
+    try {
+      const dataPath = String(ctx.dataPath || "").trim();
+      const t = String(req.body?.token ?? "").trim();
+      if (t && !令牌格式合法(t)) {
+        res.status(400).json({ code: -1, message: "Token 格式不对：应为 ghp_/gho_/ghu_/ghs_/ghr_ 或 github_pat_ 开头的 GitHub 令牌" });
+        return;
+      }
+      写更新配置(dataPath, { 令牌: t });
+      设令牌(t);
+      清空发布缓存();
+      res.json({
+        code: 0,
+        data: { 有令牌: !!t },
+        message: t ? "GitHub Token 已保存，仅在访问 GitHub 官方域名时带上" : "GitHub Token 已清除"
+      });
+    } catch (e) {
+      ctx.logger?.error?.("[kzt] update/token 失败:", e);
+      res.status(500).json({ code: -1, message: "保存 GitHub Token 失败" });
     }
   });
   base.post(wrapPath("/update/source"), (req, res) => {
@@ -2874,6 +2904,11 @@ async function plugin_set_config(ctx, config) {
 // ============================================================================
 async function plugin_init(ctx) {
   registerGfWebui(ctx);
+  try {
+    设令牌(String(读更新配置(String(ctx.dataPath || "").trim()).令牌 || ""));
+  } catch {
+    设令牌("");
+  }
   try {
     清理过期日志(ctx, { force: true });
   } catch (e) {
