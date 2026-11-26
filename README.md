@@ -1,6 +1,6 @@
 # kzt · QQ 官方机器人网页控制台
 
-![版本](https://img.shields.io/badge/version-1.7.1-blue.svg)
+![版本](https://img.shields.io/badge/version-1.7.2-blue.svg)
 ![框架](https://img.shields.io/badge/框架-咔咔珂%20kakake-0f766e.svg)
 ![平台](https://img.shields.io/badge/platform-QQ%20Official%20Bot-green.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)
@@ -110,6 +110,7 @@ git clone https://github.com/3671656786/GF-kzt.git kakake/plugins/GF-kzt
 「系统设置 → 插件自动更新」面板会显示当前版本与最新版本，可手动检查、切换下载源、指定版本安装：
 
 - **版本检测**：查 `3671656786/GF-kzt` 的最新 Release，只认 `GF-kzt-<版本>.zip` 资产；结果缓存 5 分钟，避免控制台轮询打爆 GitHub API。**每次更新都必须升版本号**，同版本重装和降级会被明确拒绝。
+- **GitHub API Token（可选）**：面板里可填 Token 解除匿名 60 次/小时限制（认证后 5000 次/小时），并显示核心配额；Token 只存插件数据目录，仅发给 GitHub 官方域名，不会发给第三方下载加速源，留空保存即清除。
 - **下载**：支持 GitHub 直连 / 官方 API / gh-proxy / catmak 四个源，首选失败按顺序降级；每个源都先试 `fetch` 再试 Node `https`，带 90 秒超时。
 - **官方签名验证**：安装前查 Release 对应 commit 的 GitHub 验签结果与作者；验签通过且作者是官方账号才直接装。否则面板会显示风险，必须点「我已了解风险，继续安装」才会继续（接口返回 409 + `需要风险确认`）。
 - **安装**：先在内存里解压并校验（必须含 `index.mjs` / `package.json` / `plugin.json` / `webui/remote.js`，且包内版本与 Release 标签一致），再备份，然后同时覆盖 `plugins/GF-kzt/`（宿主重载的复制来源）与 `plugins_two/<账号>/GF-kzt/`（当前运行副本），最后回读磁盘版本确认。
