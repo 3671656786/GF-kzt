@@ -1,6 +1,6 @@
 # kzt · QQ 官方机器人网页控制台
 
-![版本](https://img.shields.io/badge/version-1.7.2-blue.svg)
+![版本](https://img.shields.io/badge/version-1.7.3-blue.svg)
 ![框架](https://img.shields.io/badge/框架-咔咔珂%20kakake-0f766e.svg)
 ![平台](https://img.shields.io/badge/platform-QQ%20Official%20Bot-green.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)
@@ -115,7 +115,7 @@ git clone https://github.com/3671656786/GF-kzt.git kakake/plugins/GF-kzt
 - **官方签名验证**：安装前查 Release 对应 commit 的 GitHub 验签结果与作者；验签通过且作者是官方账号才直接装。否则面板会显示风险，必须点「我已了解风险，继续安装」才会继续（接口返回 409 + `需要风险确认`）。
 - **安装**：先在内存里解压并校验（必须含 `index.mjs` / `package.json` / `plugin.json` / `webui/remote.js`，且包内版本与 Release 标签一致），再备份，然后同时覆盖 `plugins/GF-kzt/`（宿主重载的复制来源）与 `plugins_two/<账号>/GF-kzt/`（当前运行副本），最后回读磁盘版本确认。
 - **异常处理**：每个阶段（检查版本 / 下载 / 解压 / 校验 / 备份 / 安装 / 回读校验）失败都会停止写入并把阶段和原因写到状态里；面板直接显示错误，不会「假装成功」。下载失败时现有文件不动。
-- **回滚备份**：备份放在 `data/<AppID>/GF-kzt/update-backups/`（不是 `plugins/` 下，避免被宿主误认成新插件），保留最近 3 份，出问题可手动拷回。
+- **回滚备份**：备份放在 `plugins/GF-kzt/update-backups/`（**不写 data 目录**）。它是插件目录的子目录，不会被宿主当成新插件；控制台插件列表删掉 kzt 时备份会一起消失，不用登录服务器。保留最近 3 份，出问题可手动拷回。
 - **状态提示**：安装期间面板每 1.5 秒刷新阶段状态；完成后延迟 2.5 秒调用 `ctx.pluginManager.reloadPlugin('GF-kzt')` 自动重载，日志会记录重载结果。
 - **下载源偏好**：存在插件数据目录的 `update-config.json`，不随插件更新被覆盖；GitHub API 未认证限流 60 次/小时，通常够用。
 

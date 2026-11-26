@@ -1578,6 +1578,7 @@ function an({
           " 新建 Token（需 public_repo / Read-only）。匿名 API 只有 60 次/小时，填了可到 5000 次/小时。Token 只存插件数据目录，仅在访问 GitHub 官方域名时带上，不会发给下载加速源；留空并保存即清除。"
         ] })
       ] }),
+      更新 && 更新.备份根 ? /* @__PURE__ */ e("div", { className: "status", children: `备份目录：${更新.备份根}（删插件时一并清除）` }) : null,
       更新 && 更新.签名 ? /* @__PURE__ */ r("div", { className: "status", children: [
         /* @__PURE__ */ e("span", { className: `badge ${更新.签名.官方已验证 ? "ok" : "fail"}`, children: 更新.签名.官方已验证 ? "官方签名已验证" : "签名未验证" }),
         " ",
