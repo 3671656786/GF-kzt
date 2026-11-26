@@ -2365,6 +2365,7 @@ function registerGfWebui(ctx) {
           错误: 状态.错误 || "",
           检查时间: Number(状态.检查时间) || 0,
           签名: 状态.签名 || null,
+          备份根: 状态.备份根 || null,
           速率限制: 状态.速率限制 || null,
           有令牌: !!String(读更新配置(dataPath).令牌 || "").trim(),
           最后结果: 状态.最后结果 || null,
