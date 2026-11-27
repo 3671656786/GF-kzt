@@ -42,12 +42,40 @@ function 清理文本(v) {
  * 取出纯文本，但**保留换行**——消息的多行排版全靠它，压成一行就没法渲染了。
  * 只压缩空格 / 制表符，`\n` 原样留下。
  */
+/**
+ * 官方群消息事件：@成员 → `<@member_openid>`，@全体 → `<@all>`，
+ * 被 @ 的用户明细在事件顶层 mentions（含 username / member_nickname）。
+ * 这里先把占位符换成可读的 `@昵称`，绝不能像旧版那样整段删掉。
+ * 来源：https://bot.q.qq.com/wiki/develop/api-v2/autogen/event/group_message_create.html
+ */
+function 展开旧提及标签(s) {
+  return String(s ?? "")
+    .replace(/<qqbot-at-user\b([^>]*)\/?>/gi, (_m, attrs) => {
+      const 取 = (name) => {
+        const hit = new RegExp(`${name}\\s*=\\s*["']([^"']*)["']`, "i").exec(String(attrs || ""));
+        return hit ? hit[1] : "";
+      };
+      return `@${取("username") || 取("name") || 取("id") || "提及"}`;
+    })
+    .replace(/<qqbot-at-everyone\b[^>]*\/?>/gi, "@全体成员");
+}
+function 展开提及(content, event) {
+  let s = 展开旧提及标签(content);
+  const 表 = new Map();
+  for (const m of Array.isArray(event?.mentions) ? event.mentions : []) {
+    const id = String(m?.member_openid || m?.id || "").trim();
+    const 名 = String(m?.member_nickname || m?.username || "").trim();
+    if (id) 表.set(id, 名 || id);
+  }
+  s = s.replace(/<@all>/gi, "@全体成员");
+  s = s.replace(/<@!?([A-Za-z0-9_]+)>/g, (_m, id) => `@${表.get(id) || id}`);
+  return s;
+}
 function 提取纯文本(content) {
-  return String(content ?? "")
-    .replace(/\r\n?/g, "\n")
-    .replace(/<qqbot-at-user[^>]*>/gi, " ")
-    .replace(/<qqbot-at-everyone[^>]*>/gi, " ")
-    .replace(/<@!?[A-Za-z0-9_]+>/g, "")
+  return 展开旧提及标签(String(content ?? "").replace(/\r\n?/g, "\n"))
+    // 兼容没有走「展开提及」的历史/其他来源数据：至少保留 @ 符号，不再吞掉整段
+    .replace(/<@all>/gi, "@全体成员")
+    .replace(/<@!?([A-Za-z0-9_]+)>/g, "@$1")
     .replace(/[ \t]+/g, " ")
     .replace(/ *\n */g, "\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -877,10 +905,9 @@ function 规范化展示内容(content) {
   s = s.replace(/<\s*file\b[^>\n]*>?/gi, "[文件]");
   // 内联指令标签必须在「通用标签清理」之前转换，否则会被整段删掉
   s = s.replace(/<qqbot-cmd-(?:input|enter)\b[^>\n]*\/?>/gi, (m) => 内联标签转链接(m));
-  s = s.replace(/<[^>\n]{1,120}>/g, (m) => {
-    if (/^<@!?[A-Za-z0-9_]+>$/i.test(m.trim())) return m;
-    return "";
-  });
+  // 历史日志或没有 mentions 的事件里可能残留官方 @ 占位符，至少把它显示成 @标识，绝不能再吞掉
+  s = s.replace(/<@all>/gi, "@全体成员").replace(/<@!?([A-Za-z0-9_]+)>/g, "@$1");
+  s = s.replace(/<[^>\n]{1,120}>/g, "");
   return 压缩内联指令(
     s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim()
   );
@@ -1124,7 +1151,8 @@ async function recordInboundMessage(ctx, event) {
   if (!scope) return;
   同步事件昵称(ctx, event);
   const userId = 取用户Id(event);
-  const rawContent = String(event.content ?? "");
+  // 先按官方 mentions 把 <@openid>/<@all> 展开成可读的 @昵称，再做文本规范化
+  const rawContent = 展开提及(event.content ?? "", event);
   let text = 规范化展示内容(提取纯文本(rawContent));
   const imageLines = await rehostInboundImages(ctx, event);
   if (imageLines.length) {
