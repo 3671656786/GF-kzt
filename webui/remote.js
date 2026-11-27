@@ -1,5 +1,6 @@
 import { jsxs as r, jsx as e, Fragment as Ue } from "react/jsx-runtime";
 import { useRef as N, useState as k, useMemo as je, useEffect as M, useCallback as H } from "react";
+import { createPortal as 传送门 } from "react-dom";
 /** 登录失效时由根组件接管，弹回登录页 */
 let 登录失效回调 = null;
 function 设登录失效回调(fn) {
@@ -562,8 +563,15 @@ function tn({
     } catch {
       return !1;
     }
-  }), [W, G] = k(null), [V, ue] = k(!1), [he, le] = k(0), [xe, K] = k(""), [渲染设置, 设渲染设置] = k({ Markdown渲染: !0, 按钮可点击: !0 }), [按钮草稿, 设按钮草稿] = k(""), [按钮开, 设按钮开] = k(!1), [消息菜单, 设消息菜单] = k(null), [回复目标, 设回复目标] = k(null), [备注编辑, 设备注编辑] = k(!1), [备注输入, 设备注输入] = k(""), de = N(null), ke = N(null), J = N(null), we = N(u), ve = N(l), ye = N(0), ce = N(!1), X = N(null), Y = N(null), $e = N(0), ze = N(!1), Z = N(null), fe = N(!1);
+  }), [W, G] = k(null), [V, ue] = k(!1), [he, le] = k(0), [xe, K] = k(""), [渲染设置, 设渲染设置] = k({ Markdown渲染: !0, 按钮可点击: !0 }), [按钮草稿, 设按钮草稿] = k(""), [按钮开, 设按钮开] = k(!1), [消息菜单, 设消息菜单] = k(null), [回复目标, 设回复目标] = k(null), [备注编辑, 设备注编辑] = k(!1), [备注输入, 设备注输入] = k(""), de = N(null), ke = N(null), J = N(null), we = N(u), ve = N(l), ye = N(0), ce = N(!1), X = N(null), Y = N(null), $e = N(0), ze = N(!1), Z = N(null), fe = N(!1), 菜单El = N(null);
   we.current = u, ve.current = l, ye.current = h.length;
+  M(() => {
+    if (!消息菜单 || !菜单El.current || typeof window === "undefined") return;
+    const el = 菜单El.current, rect = el.getBoundingClientRect();
+    const x = Math.max(8, Math.min(Number(消息菜单.x) || 0, window.innerWidth - rect.width - 12));
+    const y = Math.max(8, Math.min(Number(消息菜单.y) || 0, window.innerHeight - rect.height - 12));
+    el.style.left = `${x}px`, el.style.top = `${y}px`;
+  }, [消息菜单]);
   M(() => {
     let 活 = !0;
     return a.get("/settings").then((n) => {
@@ -1092,15 +1100,16 @@ function tn({
         )
       ] })
     ] }),
-    消息菜单 ? /* @__PURE__ */ e("div", {
+    消息菜单 && typeof document !== "undefined" ? 传送门(/* @__PURE__ */ e("div", {
       className: "im-ctx-mask",
       onClick: () => 设消息菜单(null),
       children: /* @__PURE__ */ r("div", {
         className: "im-ctx-menu",
         role: "menu",
+        ref: 菜单El,
         style: {
-          left: `${Math.max(8, Math.min(Number(消息菜单.x) || 0, (typeof window !== "undefined" ? window.innerWidth : 1024) - 180))}px`,
-          top: `${Math.max(8, Math.min(Number(消息菜单.y) || 0, (typeof window !== "undefined" ? window.innerHeight : 768) - 120))}px`
+          left: `${Math.max(8, Math.min(Number(消息菜单.x) || 0, (typeof window !== "undefined" ? window.innerWidth : 1024) - 200))}px`,
+          top: `${Math.max(8, Math.min(Number(消息菜单.y) || 0, (typeof window !== "undefined" ? window.innerHeight : 768) - 140))}px`
         },
         onClick: (n) => n.stopPropagation(),
         children: [
@@ -1118,7 +1127,7 @@ function tn({
           })
         ]
       })
-    }) : null,
+    }), document.body) : null,
     W ? /* @__PURE__ */ e("div", { className: "im-send-cfg-mask", onClick: () => !V && G(null), children: /* @__PURE__ */ r("div", { className: "im-send-cfg", role: "dialog", "aria-label": "撤回消息", onClick: (n) => n.stopPropagation(), children: [
       /* @__PURE__ */ e("div", { className: "im-send-cfg-title", children: "撤回消息" }),
       /* @__PURE__ */ e("p", { className: "im-send-cfg-hint", children: "确认撤回这条消息吗？群内撤回用户消息需要机器人具备管理权限；自己发出的消息通常限 2 分钟内。" }),
