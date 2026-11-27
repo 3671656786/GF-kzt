@@ -977,6 +977,17 @@ function saveNicknameCache(root, cache) {
  */
 const jsonlCache = new Map();
 const JSONL_CACHE_MAX = 64;
+// 只限制文件数不够：一个群一天几千条长消息就能把 64 个文件撑到几百 MB。
+// 再加一个「总条目数」硬上限，超了就不缓存（下次从磁盘重读，正确性不受影响）。
+const JSONL_CACHE_MAX_ENTRIES = 4000;
+export function 日志缓存统计() {
+  let 条目数 = 0;
+  for (const v of jsonlCache.values()) 条目数 += v.entries.length;
+  return { 文件数: jsonlCache.size, 条目数 };
+}
+export function 清空日志缓存() {
+  jsonlCache.clear();
+}
 
 function readJsonlFile(file) {
   let stat;
@@ -1007,9 +1018,15 @@ function readJsonlFile(file) {
     return [];
   }
 
-  if (jsonlCache.size >= JSONL_CACHE_MAX) {
+  // 超大单文件不进缓存：缓存它是 OOM 的主要来源，直接从磁盘读反而更稳
+  if (entries.length > JSONL_CACHE_MAX_ENTRIES) return entries;
+  let 已有条目 = 0;
+  for (const v of jsonlCache.values()) 已有条目 += v.entries.length;
+  while ((jsonlCache.size >= JSONL_CACHE_MAX || 已有条目 + entries.length > JSONL_CACHE_MAX_ENTRIES) && jsonlCache.size) {
     const oldest = jsonlCache.keys().next().value;
-    if (oldest !== undefined) jsonlCache.delete(oldest);
+    const old = jsonlCache.get(oldest);
+    if (old) 已有条目 -= old.entries.length;
+    jsonlCache.delete(oldest);
   }
   jsonlCache.set(file, { key: cacheKey, entries });
   return entries;
@@ -3033,6 +3050,10 @@ async function plugin_init(ctx) {
 
 async function plugin_cleanup(ctx) {
   cancelSharpDependencyInstall(ctx?.logger);
+  // 卸载/重载时主动释放缓存，避免旧实例在宿主还持有引用时把堆带着不释放
+  jsonlCache.clear();
+  会话缓存.clear();
+  清空发布缓存();
   ctx.logger?.info?.("[kzt] 插件已卸载");
 }
 
