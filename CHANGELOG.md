@@ -2,6 +2,10 @@
 
 本插件遵循 [语义化版本](https://semver.org/lang/zh-CN/)。发布包见 [Releases](https://github.com/3671656786/GF-kzt/releases)。
 
+## v1.7.8
+
+- 修复右键菜单被消息面板裁切/显示到外面的问题：菜单改用 React portal 挂到 `document.body`，避开 `backdrop-filter` 对 `position:fixed` 包含块的影响；并在挂载后按菜单实际尺寸二次钳位到视口内。
+
 ## v1.7.7
 
 - 修复机器人自己发送的消息没有右键/长按菜单：只要消息有 `msgId`、`refIdx` 或属于出站消息就唤出菜单；机器人旧消息若没有可撤回 ID，只禁用「撤回」，「回复（引用）」仍可用。
