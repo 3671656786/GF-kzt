@@ -1,6 +1,6 @@
 # kzt · QQ 官方机器人网页控制台
 
-![版本](https://img.shields.io/badge/version-1.7.4-blue.svg)
+![版本](https://img.shields.io/badge/version-1.7.5-blue.svg)
 ![框架](https://img.shields.io/badge/框架-咔咔珂%20kakake-0f766e.svg)
 ![平台](https://img.shields.io/badge/platform-QQ%20Official%20Bot-green.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)
@@ -96,7 +96,12 @@ git clone https://github.com/3671656786/GF-kzt.git kakake/plugins/GF-kzt
   输入框里已写的文字会作为这条媒体的说明文字，发完自动清空
   - 单次上限 **5MB**（QQ 官方二进制直传硬限制，超限需改用分片上传），超限会直接提示
   - 图片按 `file_type=1`、文件按 `file_type=4` 上传；群聊与私聊各走自己的上传接口
-- **撤回**：长按消息气泡 3 秒，确认后撤回（需要机器人有对应权限；自己发出的消息限 2 分钟内）
+- **消息菜单**：对消息**右键**（手机**长按 0.6 秒**）唤出菜单，可「撤回」或「回复（引用）」
+  - 撤回：官方限制发送超过 2 分钟不可撤回；群内撤回他人消息需要机器人是群管理员
+  - 回复（引用）：官方 `message_reference.message_id`，输入区会显示引用条；支持官方给的 `msg_idx` / `ref_idx`
+
+### 群聊备注
+群聊会话标题旁点「备注」可写 ≤40 字备注，会话列表和聊天页都会显示；留空保存即清除。备注存在插件数据目录 `chat-notes.json`。
 
 ### 系统设置
 - **消息渲染**：实时渲染 Markdown / 内嵌按钮可点击，默认开启
@@ -112,6 +117,7 @@ git clone https://github.com/3671656786/GF-kzt.git kakake/plugins/GF-kzt
 「系统设置 → 插件自动更新」面板会显示当前版本与最新版本，可手动检查、切换下载源、指定版本安装：
 
 - **版本检测**：查 `3671656786/GF-kzt` 的最新 Release，只认 `GF-kzt-<版本>.zip` 资产；结果缓存 5 分钟，避免控制台轮询打爆 GitHub API。**每次更新都必须升版本号**，同版本重装和降级会被明确拒绝。
+- **实时进度**：更新过程按阶段显示百分比与当前阶段，失败也保留进度
 - **GitHub API Token（可选）**：面板里可填 Token 解除匿名 60 次/小时限制（认证后 5000 次/小时），并显示核心配额；Token 只存插件数据目录，仅发给 GitHub 官方域名，不会发给第三方下载加速源，留空保存即清除。
 - **下载**：支持 GitHub 直连 / 官方 API / gh-proxy / catmak 四个源，首选失败按顺序降级；每个源都先试 `fetch` 再试 Node `https`，带 90 秒超时。
 - **官方签名验证**：安装前查 Release 对应 commit 的 GitHub 验签结果与作者；验签通过且作者是官方账号才直接装。否则面板会显示风险，必须点「我已了解风险，继续安装」才会继续（接口返回 409 + `需要风险确认`）。

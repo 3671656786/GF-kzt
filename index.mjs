@@ -81,6 +81,26 @@ function 提取纯文本(content) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+/**
+ * 官方：非机器人消息的引用索引在 message_scene.ext 的 msg_idx；
+ * 机器人自己发的消息在发送响应 ext_info.ref_idx。两者都落库，供「回复（引用）」使用。
+ * 来源：https://bot.q.qq.com/wiki/develop/api-v2/autogen/event/group_message_create.html
+ *      https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_groups_group_openid_messages.post.html
+ */
+function 提取引用索引(event) {
+  const ext = event?.message_scene?.ext || event?.ext || [];
+  if (!Array.isArray(ext)) return "";
+  for (const item of ext) {
+    const hit = /^msg_idx=(.+)$/.exec(String(item || "").trim());
+    if (hit && hit[1].trim()) return hit[1].trim();
+  }
+  return "";
+}
+function 提取回执引用索引(result) {
+  const data = result && typeof result === "object" ? result : {};
+  const ref = data.ext_info?.ref_idx || data.data?.ext_info?.ref_idx;
+  return String(ref || "").trim();
+}
 function 取用户Id(event) {
   const author = event.author;
   return String(
@@ -1170,6 +1190,7 @@ async function recordInboundMessage(ctx, event) {
     groupId: scope === "group" ? groupIdOf(event) : "",
     content: content || "[空消息]",
     msgId: String(event.id || "").trim(),
+    refIdx: 提取引用索引(event),
     rankable: 判定计入排行({ scope, eventType, rawContent, content }),
     direction: "in"
   });
@@ -1236,6 +1257,7 @@ function recordOutboundMessage(ctx, 发送目标, content, apiResult, keyboard) 
     groupId,
     content: text,
     msgId: extractApiMsgId(apiResult),
+    refIdx: 提取回执引用索引(apiResult),
     // 把内嵌键盘一起存下来，控制台才能把按钮还原成可点的样子
     keyboard: keyboard && Array.isArray(keyboard.rows) && keyboard.rows.length ? keyboard : void 0,
     rankable: false,
@@ -1406,6 +1428,28 @@ function toggleChatPin(ctx, key) {
   return { pins: next, pinned: next.includes(k) };
 }
 
+// ===== 群聊备注（存插件数据目录，不写插件目录） =====
+function 备注文件(ctx) {
+  return resolveUserDataFile$1(ctx, "chat-notes.json");
+}
+function 读群备注(ctx) {
+  const raw = readJsonFile$1(备注文件(ctx), { notes: {} });
+  return raw && typeof raw.notes === "object" && raw.notes && !Array.isArray(raw.notes) ? raw.notes : {};
+}
+function 写群备注(ctx, scope, id, note) {
+  const all = 读群备注(ctx);
+  const key = chatKey(scope === "group" ? "group" : "private", id);
+  const text = String(note || "").trim().slice(0, 40);
+  if (text) all[key] = text;
+  else delete all[key];
+  writeJsonFile$1(备注文件(ctx), { notes: all });
+  return { notes: all, key, 备注: text };
+}
+function 群备注标题(ctx, scope, id, fallback) {
+  if (scope !== "group") return fallback;
+  return 读群备注(ctx)[chatKey("group", id)] || fallback;
+}
+
 // ===== 控制台设置：渲染默认开启，消息默认永久保留 =====
 const 设置版本号 = 2;
 const 默认设置 = { Markdown渲染: true, 按钮可点击: true, 保留天数: 0, 设置版本: 设置版本号 };
@@ -1546,7 +1590,7 @@ function listChatSessions(ctx, opts) {
       key,
       scope: v.scope,
       id: v.id,
-      title,
+      title: 群备注标题(ctx, v.scope, v.id, title),
       avatar: qqAppAvatarUrl$1(appId, v.id, 100),
       lastContent: previewContent(v.last.content),
       lastTime: Number(v.last.time) || 0,
@@ -1605,6 +1649,7 @@ function listChatMessages(ctx, scope, id, opts) {
       content: 规范化展示内容(e.content),
       eventType: e.eventType,
       msgId: e.msgId,
+      refIdx: e.refIdx || "",
       keyboard: e.keyboard || null,
       direction: out ? "out" : "in"
     };
@@ -1614,7 +1659,7 @@ function listChatMessages(ctx, scope, id, opts) {
     key: chatKey(scope, peerId),
     scope,
     id: peerId,
-    title: scope === "private" ? 取缓存昵称(ctx, peerId) || (last && !isOutbound(last) ? last.userName : "") || peerId : peerId,
+    title: 群备注标题(ctx, scope, peerId, scope === "private" ? 取缓存昵称(ctx, peerId) || (last && !isOutbound(last) ? last.userName : "") || peerId : peerId),
     avatar: qqAppAvatarUrl$1(appId, peerId, 100),
     lastContent: previewContent(last?.content || ""),
     lastTime: Number(last?.time) || 0,
@@ -2263,6 +2308,34 @@ function registerGfWebui(ctx) {
       res.status(500).json({ code: -1, message: "会话消息失败" });
     }
   });
+  base.get(wrapPath("/chats/notes"), (_req, res) => {
+    try {
+      res.json({ code: 0, data: { notes: 读群备注(ctx) } });
+    } catch (e) {
+      ctx.logger?.error?.("[kzt] chats/notes 失败:", e);
+      res.status(500).json({ code: -1, message: "读取备注失败" });
+    }
+  });
+  base.post(wrapPath("/chats/note"), (req, res) => {
+    try {
+      const body = req.body || {};
+      const scope = String(body.scope || "group").trim();
+      const id = String(body.id || "").trim();
+      if (scope !== "group" && scope !== "private") {
+        res.status(400).json({ code: -1, message: "scope 须为 group / private" });
+        return;
+      }
+      if (!id) {
+        res.status(400).json({ code: -1, message: "缺少 id" });
+        return;
+      }
+      const data = 写群备注(ctx, scope, id, body.note);
+      res.json({ code: 0, data, message: data.备注 ? "备注已保存" : "备注已清除" });
+    } catch (e) {
+      ctx.logger?.error?.("[kzt] chats/note 失败:", e);
+      res.status(500).json({ code: -1, message: "保存备注失败" });
+    }
+  });
   base.post(wrapPath("/chats/pin"), (req, res) => {
     try {
       const body = req.body || {};
@@ -2300,7 +2373,8 @@ function registerGfWebui(ctx) {
       const target = scopeRaw === "group" ? { scope: "group", group_openid: id } : { scope: "c2c", user_openid: id };
       const keyboard = 规范化键盘(body.keyboard);
       const useMd = asMd || !!keyboard;
-      const result = await 发消息(ctx, target, [useMd ? 段_md(content) : 段_文本(content)], { keyboard });
+      const replyTo = 清理文本(body.replyTo || body.reply?.message_id);
+      const result = await 发消息(ctx, target, [useMd ? 段_md(content) : 段_文本(content)], { keyboard, replyTo });
       res.json({ code: 0, data: { ok: true, result, format: useMd ? "md" : "text", keyboard: !!keyboard }, message: useMd ? "已发送（Markdown）" : "已发送" });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -2389,6 +2463,7 @@ function registerGfWebui(ctx) {
           最新版本,
           有更新: 最新版本 ? 比较版本(最新版本, 当前版本) > 0 : false,
           阶段: 状态.阶段 || "空闲",
+          进度: Number(状态.进度) || 0,
           进行中: !!状态.进行中,
           错误: 状态.错误 || "",
           检查时间: Number(状态.检查时间) || 0,
@@ -2710,6 +2785,12 @@ function 规范化键盘(raw) {
  * @returns {Promise<object|null>} 最后一次接口返回
  */
 async function 发消息(ctx, 发送目标, 内容, 选项 = {}) {
+  // 官方 message_reference.message_id：非机器人消息用 msg_idx，机器人自己的用 ext_info.ref_idx
+  const 引用Id = 清理文本(选项.replyTo);
+  const 附加引用 = (body) => {
+    if (引用Id) body.message_reference = { message_id: 引用Id };
+    return body;
+  };
   const list = Array.isArray(内容) ? 内容 : [内容];
   const apiPath = 组装发送路径(发送目标);
   let keyboard = 选项?.keyboard && Array.isArray(选项.keyboard.rows) && 选项.keyboard.rows.length ? 选项.keyboard : null;
@@ -2735,7 +2816,7 @@ async function 发消息(ctx, 发送目标, 内容, 选项 = {}) {
       if (!md) continue;
       const body = { msg_type: 2, markdown: { content: 补全Md图片语法(md) } };
       if (keyboard) body.keyboard = { content: keyboard };
-      lastResult = await BOTAPI(ctx, apiPath, 附加被动凭证(发送目标, body));
+      lastResult = await BOTAPI(ctx, apiPath, 附加引用(附加被动凭证(发送目标, body)));
       outChunks.push(md);
       continue;
     }
@@ -2743,7 +2824,7 @@ async function 发消息(ctx, 发送目标, 内容, 选项 = {}) {
     if (type === "text") {
       const text = typeof raw === "string" ? raw : String(raw?.text ?? "");
       if (!text) continue;
-      lastResult = await BOTAPI(ctx, apiPath, 附加被动凭证(发送目标, { msg_type: 0, content: text }));
+      lastResult = await BOTAPI(ctx, apiPath, 附加引用(附加被动凭证(发送目标, { msg_type: 0, content: text })));
       outChunks.push(text);
     }
   }
