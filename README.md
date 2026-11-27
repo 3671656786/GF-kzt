@@ -1,6 +1,6 @@
 # kzt · QQ 官方机器人网页控制台
 
-![版本](https://img.shields.io/badge/version-1.7.5-blue.svg)
+![版本](https://img.shields.io/badge/version-1.7.6-blue.svg)
 ![框架](https://img.shields.io/badge/框架-咔咔珂%20kakake-0f766e.svg)
 ![平台](https://img.shields.io/badge/platform-QQ%20Official%20Bot-green.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)
