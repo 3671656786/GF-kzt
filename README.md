@@ -1,6 +1,6 @@
 # kzt · QQ 官方机器人网页控制台
 
-![版本](https://img.shields.io/badge/version-1.7.3-blue.svg)
+![版本](https://img.shields.io/badge/version-1.7.4-blue.svg)
 ![框架](https://img.shields.io/badge/框架-咔咔珂%20kakake-0f766e.svg)
 ![平台](https://img.shields.io/badge/platform-QQ%20Official%20Bot-green.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)
@@ -81,6 +81,8 @@ git clone https://github.com/3671656786/GF-kzt.git kakake/plugins/GF-kzt
   - **实时渲染 Markdown**：标题、加粗/斜体/删除线、行内代码与代码块、列表、引用、分割线、链接、图片、表格，换行原样保留
   - **内嵌按钮还原**：消息附带的键盘会渲染成蓝色按钮，点击行为与 QQ 一致——
     指令按钮**填入输入框**（可改再发）、链接按钮**直接打开**、回调按钮需真实用户点击（控制台会提示无法模拟）
+  - **@ 提及**：官方事件里的 `<@member_openid>` / `<@all>` 会按 `mentions` 展开成 `@昵称` / `@全体成员`，并渲染成蓝色胶囊，不再丢失
+  - **相关样式**：引用块 `> ` 使用灰色字体；删除线 `~~…~~`、加粗斜体 `***…***`、下划线加粗 `__…__` 均按官方 Markdown 语法渲染
   - **其他机器人的按钮**：这类"蓝色文字"是 markdown 里的 `mqqapi://aio/inlinecmd` 内联指令链接，
     或 `<qqbot-cmd-input text="…" show="…" />` 标签，两种都会还原成可点击的蓝色文字，
     点一下就把指令填进输入框（参数支持 `cmd=` / `command=` / `text=`）
