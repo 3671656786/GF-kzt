@@ -704,7 +704,7 @@ function tn({
     }
     i(n ? "已切换：Markdown" : "已切换：纯文本");
   }, Be = (n, d) => {
-    if (!String(d.msgId || "").trim() || n.button != null && n.button !== 0) return;
+    if (!(String(d.msgId || "").trim() || String(d.refIdx || "").trim() || d.direction === "out") || n.button != null && n.button !== 0) return;
     // 手机长按 0.6 秒唤出菜单（与桌面右键一致），不再直接弹撤回确认
     const x = Number(n.clientX) || 0, y = Number(n.clientY) || 0;
     ze.current = !1, Z.current = d, $e.current = Date.now(), le(0);
@@ -875,7 +875,7 @@ function tn({
       R && !h.length ? /* @__PURE__ */ e("div", { className: "im-empty", children: "加载中…" }) : null,
       !R && !h.length ? /* @__PURE__ */ e("div", { className: "im-empty", children: "该会话暂无消息" }) : null,
       h.map((n, d) => {
-        const b = n.direction === "out", v = !b && !!n.userId && n.userId !== "bot" && n.userId !== "unknown", T = !!String(n.msgId || "").trim(), D = he > 0 && !!n.msgId && Z.current?.msgId === n.msgId;
+        const b = n.direction === "out", v = !b && !!n.userId && n.userId !== "bot" && n.userId !== "unknown", T = !!String(n.msgId || "").trim(), 可菜单 = T || !!String(n.refIdx || "").trim() || b, D = he > 0 && !!n.msgId && Z.current?.msgId === n.msgId;
         let j = 预处理指令标签(String(n.content || ""));
         j = j.replace(/\[按钮\]\s*([^\n\]]+)/g, "`$1`");
         const 键盘行 = 渲染设置.按钮可点击 ? 解析键盘(n.keyboard) : [], { html: U, isMd: A } = 渲染设置.Markdown渲染 ? Qe(j) : { html: B(j.replace(/\[([^\]]+)\]\(mqqapi:[^)]+\)/gi, "$1").replace(/([^\s()[\]{}]{1,24})\(mqqapi:[^)]+\)/gi, "$1")).replace(/\n/g, "<br>"), isMd: !1 };
@@ -905,14 +905,15 @@ function tn({
               {
                 className: `im-bubble${A ? " md" : ""}${T ? " recallable" : ""}${D ? " holding" : ""}`,
                 style: D ? { "--hold": String(he) } : void 0,
-                title: T ? "右键 / 长按可撤回或引用回复 · 点击图片可放大" : "点击图片可放大",
+                title: 可菜单 ? "右键 / 长按可撤回或引用回复 · 点击图片可放大" : "点击图片可放大",
                 onPointerDown: (S) => Be(S, n),
                 onPointerUp: ge,
                 onPointerLeave: ge,
                 onPointerCancel: ge,
                 onContextMenu: (S) => {
-                  T && S.preventDefault();
-                  if (T) 设消息菜单({ x: S.clientX || 0, y: S.clientY || 0, msg: n });
+                  if (!可菜单) return;
+                  S.preventDefault();
+                  设消息菜单({ x: S.clientX || 0, y: S.clientY || 0, msg: n });
                 },
                 onClick: (S) => {
                   if (fe.current) {
@@ -1105,6 +1106,8 @@ function tn({
         children: [
           /* @__PURE__ */ e("button", {
             type: "button", role: "menuitem",
+            disabled: !String(消息菜单.msg.msgId || "").trim(),
+            title: String(消息菜单.msg.msgId || "").trim() ? "撤回这条消息" : "这条消息没有可撤回的 ID（机器人自己发的旧消息可能没有）",
             onClick: () => { const v = 消息菜单.msg; 设消息菜单(null); G(v); },
             children: "撤回"
           }),
